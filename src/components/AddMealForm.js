@@ -41,8 +41,6 @@ class AddMealForm extends React.Component {
                 <input type={'text'} value={this.state.mealName} placeholder={'nom du plat'} onChange={this.handleMealNameChange} />
                 <input type={'text'} value={this.state.ingredients} placeholder={'liste des ingrédients séparés par -'} style={{width: '70%'}} onChange={this.handleIngredientsChange} />
                 <input type={'submit'} value={'Submit'} onClick={this.handleSubmit} />
-                {this.state.ingredients}
-                
             </div>
         );
     }
