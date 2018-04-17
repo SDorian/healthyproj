@@ -1,4 +1,5 @@
 import React, { Component } from 'react';
+import axios from 'axios';
 import logo from './logoHW.png';
 import './App.css';
 
@@ -9,71 +10,55 @@ import List from './components/List';
 
 class App extends Component {
   
-  state = {
-    isOpen: false,
-    inputText: '',
-    selectedDay: 'lundi',
-    selectedTime: 'midi',
-    week: {
-      'lundi': {
-        "midi": '',
-        "soir": ''
-      },
-      "mardi": {
-        "midi": '',
-        "soir": ''
-      },
-      "mercredi": {
-        "midi": '',
-        "soir": '' 
-      },
-      "jeudi": {
-        "midi": '',
-        "soir": ''
-      },
-      "vendredi": {
-        "midi": '',
-        "soir": ''
-      },
-      "samedi": {
-        "midi": '',
-        "soir": ''
-      },
-      "dimanche": {
-        "midi": '',
-        "soir": ''
-      }
-    },
+  constructor(props) {
+    super(props);
 
-    plats: [
-      {
-        nom: 'omelette au fromage',
-        ingredients: ['oeufs', 'lait', 'fromage']
-      },
-      {
-        nom: 'Steack haricots vers',
-        ingredients: ['steack haché', 'haricots vers', 'ail']
-      },
-      {
-        nom: 'Soupe de tomate',
-        ingredients: ['soupe de tomate Knor bio']
-      },
-      {
-        nom: 'Poëlée de légumes Cordon Bleu',
-        ingredients: ['haricots', 'poivrons', 'tomates', 'oignons', 'maïs', 'champignon', 'cordon bleu'] 
-      }
-    ],
+    this.state = {
+      isOpen: false,
+      current_id: '',
+      selectedTime: '',
+      menus: [],
+      plats: [],
+      shoppingList: []
+    }
+  }
+  
 
-    ingredientList: []
+  loadMenusFromServer = () => {
+    axios.get(this.props.url)
+      .then(res => {
+        this.setState({menus : res.data});
+      })
+  }
+
+  loadPlatsFromServer = () => {
+    
+    axios.get('http://localhost:3001/api/plat')
+      .then(res => {
+        this.setState({plats : res.data});
+      })
+  }
+
+  generateShoppingList = () => {
+    let list= [];
+    this.state.menus.forEach(function(menu)  {
+      if(menu.midi)
+        list = [...list, ...menu.midi.ingredients];
+    })
+
+    list = [...(new Set(list))];
+    this.setState({
+      shoppingList: list
+    });
   }
 
   toggleModal = () => {
     this.setState({isOpen: !this.state.isOpen});
   }
 
-  handleCellClick = (day, time) => {
+  handleCellClick = (id, time) => {
     this.setState({
-      selectedDay: day,
+      current_id: id,
       selectedTime: time
     });
   }
@@ -83,21 +68,100 @@ class App extends Component {
   }
 
   
-  handleSubmitClick = (repas, ingredients) => {
-    this.setState(prevState => ({
-      week:  Object.assign({}, this.state.week, { [this.state.selectedDay]: Object.assign({}, this.state.week[this.state.selectedDay], { [this.state.selectedTime]: repas }) }),
-      ingredientList: [...prevState.ingredientList, ...ingredients],
+  handleMenuSubmit = (plat) => {
+    let menu = {};
+
+    if(this.state.selectedTime === 'midi')
+      menu = {midi: plat}
+    else 
+      menu = {soir: plat}
+
+    axios.put(`${this.props.url}/${this.state.current_id}`, menu)
+      .then(res => {
+        this.loadMenusFromServer();
+       
+      })
+      .catch(err => {
+        console.log(err);
+      })
+    
+    this.setState({
       isOpen: false
-    }));
+    });
   }
 
-  handleSubmitAddMeal = (ingredient) => {
-    this.setState(prevState => ({
-      plats: [...prevState.plats, ingredient]
-    }))
+  handlePlatSubmit = (plat) => {
+    axios.post('http://localhost:3001/api/plat', plat)
+      .then(res =>
+        this.loadPlatsFromServer()
+      )
+      .catch(err => {
+        console.error(err);
+      });
+  }
+
+  handleMenuDelete = (id, time) => {
+    let menu = {};
+    if(time === 'midi')
+      menu = {midi: ' '}
+    else 
+      menu = {soir: ' '}
+
+    axios.put(`${this.props.url}/${id}`, menu)
+      .then(res => {
+        this.loadMenusFromServer();
+      })
+      .catch(err => {
+        console.log(err);
+      })
+  }
+
+  componentDidMount = () => {
+    this.loadMenusFromServer();
+    this.loadPlatsFromServer(); 
   }
 
   render() {
+  
+    let repas = new Map();
+    const days= ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+    let repas_midi = '';
+    let repas_soir = '';
+    
+    
+   
+   // console.log(this.state.shoppingList);
+
+    this.state.menus.forEach(function(value) {
+      repas.set(value.jour, value);
+    });
+
+    repas_midi = days.map((day, i) =>
+      {
+        let current_day = repas.get(day)
+        if(current_day) {
+          return current_day['midi'] ? (
+            <td key={current_day['_id']}><Cell value={current_day['midi'].nom} id={current_day['_id']} time={'midi'} onCellClick={this.handleCellClick} onMenuDelete={this.handleMenuDelete} buttonClick={this.toggleModal} /></td>
+          ) : (
+            <td key={current_day['_id']}><Cell value={''} id={current_day['_id']} time={'midi'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal} /></td>
+          )
+        }
+      }
+    )
+
+    repas_soir = days.map((day, i) =>
+      {
+        let current_day = repas.get(day)
+        if(current_day) {
+          return current_day['soir'] ? (
+            <td key={current_day['_id']}><Cell value={current_day['soir'].nom} id={current_day['_id']} time={'soir'} onCellClick={this.handleCellClick} onMenuDelete={this.handleMenuDelete} buttonClick={this.toggleModal} /></td>
+          ) : (
+            <td key={current_day['_id']}><Cell value={''} id={current_day['_id']} time={'soir'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal} /></td>
+          )
+        }
+      }
+    )
+
     return (
       <div className="App">
         <header className="App-header">
@@ -119,30 +183,20 @@ class App extends Component {
             </tr>
             <tr>
               <td>Midi</td>
-              <td><Cell value={this.state.week.lundi.midi} day={'lundi'} time={'midi'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal} /></td>
-              <td><Cell value={this.state.week.mardi.midi} day={'mardi'} time={'midi'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal} /></td>
-              <td><Cell value={this.state.week.mercredi.midi}day={'mercredi'} time={'midi'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal} /></td>
-              <td><Cell value={this.state.week.jeudi.midi}day={'jeudi'} time={'midi'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal}  /></td>
-              <td><Cell value={this.state.week.vendredi.midi} day={'vendredi'} time={'midi'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal} /></td>
-              <td><Cell value={this.state.week.samedi.midi} day={'samedi'} time={'midi'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal} /></td>
-              <td><Cell value={this.state.week.dimanche.midi} day={'dimanche'} time={'midi'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal} /></td>
+              {repas_midi}
             </tr>
             <tr>
               <td>Soir</td>
-              <td><Cell value={this.state.week.lundi.soir} day={'lundi'} time={'soir'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal} /></td>
-              <td><Cell value={this.state.week.mardi.soir} day={'mardi'} time={'soir'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal} /></td>
-              <td><Cell value={this.state.week.mercredi.soir} day={'mercredi'} time={'soir'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal} /></td>
-              <td><Cell value={this.state.week.jeudi.soir} day={'jeudi'} time={'soir'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal} /></td>
-              <td><Cell value={this.state.week.vendredi.soir} day={'vendredi'} time={'soir'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal} /></td>
-              <td><Cell value={this.state.week.samedi.soir} day={'samedi'} time={'soir'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal}  /></td>
-              <td><Cell value={this.state.week.dimanche.soir} day={'dimanche'} time={'soir'} onCellClick={this.handleCellClick} buttonClick={this.toggleModal} /></td>
+              {repas_soir}
             </tr>
             </tbody>
           </table>
         </div>
-        <Modal show={this.state.isOpen} onClose={this.toggleModal} onSubmit={this.handleSubmitClick} meals={this.state.plats} />
-        <AddMealForm onSubmit={this.handleSubmitAddMeal} />
-        <List listIngredients={this.state.ingredientList} />
+
+        <Modal show={this.state.isOpen} onClose={this.toggleModal} onMenuSubmit={this.handleMenuSubmit} meals={this.state.plats} />
+        <AddMealForm onPlatSubmit={this.handlePlatSubmit} />
+        <List shoppingList={this.state.shoppingList} />
+        <button onClick={this.generateShoppingList}> { (this.state.shoppingList.length > 0) ? 'Reload shopping list' : 'Generate shopping list' }</button>
       </div>
     );
   }
